@@ -163,13 +163,6 @@ eas build --platform android
 - Android 6+
 - Expo Go app
 
-## Contributing 🤝
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License 📄
-
-This project is licensed under the MIT License.
 
 ## Acknowledgments 🙏
 
@@ -177,11 +170,6 @@ This project is licensed under the MIT License.
 - Farmers for user feedback
 - Open-source community for amazing tools
 
-## Contact 📧
-
-For support or inquiries:
-- Email: support@cropguard.ai
-- Phone: +91 9876543210
 
 ---
 
