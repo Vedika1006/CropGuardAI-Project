@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,13 @@ import { Image } from 'expo-image';
 
 export const History: React.FC = () => {
   const { language } = useSettingsStore();
-  const { detections, clearHistory } = useHistoryStore();
+  const { detections, clearHistory, syncHistory } = useHistoryStore();
+
+  useEffect(() => {
+    syncHistory().catch(() => {
+      // Keep whatever is already cached locally if the server sync fails
+    });
+  }, []);
 
   const handleClearHistory = () => {
     clearHistory();

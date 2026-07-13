@@ -5,6 +5,7 @@ import { Button, Input, Label } from '@/components/ui';
 import { PageHeader } from '@/components/PageHeader';
 import { t } from '@/lib/i18n';
 import { useSettingsStore } from '@/store/settingsStore';
+import { submitIssueReport, submitHelpRequest } from '@/lib/api';
 import { colors } from '@/theme/colors';
 
 type FormType = 'none' | 'issue' | 'expert';
@@ -23,18 +24,21 @@ export const Help: React.FC = () => {
 
     setLoading(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    alert(
-      activeForm === 'issue'
-        ? 'Issue reported successfully!'
-        : 'Expert help request sent!'
-    );
-
-    setFormData({ title: '', description: '' });
-    setActiveForm('none');
-    setLoading(false);
+    try {
+      if (activeForm === 'issue') {
+        await submitIssueReport(formData.title, formData.description);
+        alert('Issue reported successfully!');
+      } else {
+        await submitHelpRequest(formData.title, formData.description);
+        alert('Expert help request sent!');
+      }
+      setFormData({ title: '', description: '' });
+      setActiveForm('none');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Submission failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
