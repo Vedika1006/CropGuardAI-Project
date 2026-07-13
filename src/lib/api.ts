@@ -1,70 +1,115 @@
-// Mock API for disease detection
+// Real API client for the CropGuard-Backend (Node/Express) service.
 
-const mockDiseases = [
-  {
-    crop: 'Rice',
-    disease: 'Leaf Blast',
-    confidence: 92,
-    treatments: {
-      organic: ['Use neem oil spray', 'Apply Trichoderma viride', 'Improve drainage'],
-      chemical: ['Apply Tricyclazole fungicide', 'Use Carbendazim', 'Spray Mancozeb'],
-      preventive: ['Use resistant varieties', 'Maintain proper spacing', 'Avoid excess nitrogen'],
-    },
-  },
-  {
-    crop: 'Wheat',
-    disease: 'Rust',
-    confidence: 87,
-    treatments: {
-      organic: ['Use sulfur dust', 'Apply garlic extract', 'Improve air circulation'],
-      chemical: ['Apply Propiconazole', 'Use Tebuconazole', 'Spray Azoxystrobin'],
-      preventive: ['Plant resistant varieties', 'Remove infected plants', 'Crop rotation'],
-    },
-  },
-  {
-    crop: 'Tomato',
-    disease: 'Late Blight',
-    confidence: 95,
-    treatments: {
-      organic: ['Use copper spray', 'Apply Bacillus subtilis', 'Neem oil treatment'],
-      chemical: ['Apply Chlorothalonil', 'Use Metalaxyl', 'Spray Mancozeb'],
-      preventive: ['Avoid overhead watering', 'Improve ventilation', 'Remove infected leaves'],
-    },
-  },
-  {
-    crop: 'Cotton',
-    disease: 'Bacterial Blight',
-    confidence: 89,
-    treatments: {
-      organic: ['Use copper-based sprays', 'Apply compost tea', 'Neem cake application'],
-      chemical: ['Apply Streptocycline', 'Use Copper oxychloride', 'Spray Validamycin'],
-      preventive: ['Use disease-free seeds', 'Crop rotation', 'Maintain field hygiene'],
-    },
-  },
-];
+import { API_BASE_URL } from '@/lib/config';
+import { useAuthStore } from '@/store/authStore';
 
-export const predictDisease = async (imageUri: string): Promise<{
+const authHeaders = (): Record<string, string> => {
+  const token = useAuthStore.getState().token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+interface Treatments {
+  organic: string[];
+  chemical: string[];
+  preventive: string[];
+}
+
+interface DetectionResult {
   crop: string;
   disease: string;
   confidence: number;
-  treatments: {
-    organic: string[];
-    chemical: string[];
-    preventive: string[];
-  };
-}> => {
-  // Simulate API call delay
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  treatments: Treatments;
+}
 
-  // Return random mock disease
-  const result = mockDiseases[Math.floor(Math.random() * mockDiseases.length)];
-  
-  return result;
+export const predictDisease = async (imageUri: string): Promise<DetectionResult> => {
+  const filename = imageUri.split('/').pop() || 'photo.jpg';
+  const extMatch = /\.(\w+)$/.exec(filename);
+  const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+  const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+  const formData = new FormData();
+  // React Native's FormData accepts this { uri, name, type } shape for file uploads.
+  formData.append('image', {
+    uri: imageUri,
+    name: filename,
+    type: mimeType,
+  } as unknown as Blob);
+
+  const response = await fetch(`${API_BASE_URL}/api/detect`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(),
+      // Do not set Content-Type manually — fetch sets the multipart boundary automatically.
+    },
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.message || 'Disease detection failed');
+  }
+
+  return {
+    crop: data.cropType,
+    disease: data.disease,
+    confidence: data.confidence,
+    treatments: data.recommendations,
+  };
 };
 
+export const fetchDetectionHistory = async () => {
+  const response = await fetch(`${API_BASE_URL}/api/detect`, {
+    headers: { ...authHeaders() },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.message || 'Failed to load history');
+  }
+  return data as Array<{
+    _id: string;
+    cropType: string;
+    disease: string;
+    confidence: number;
+    recommendations: Treatments;
+    createdAt: string;
+  }>;
+};
+
+export const submitIssueReport = async (title: string, description: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/support/issue`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ title, description }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.message || 'Failed to submit issue report');
+  }
+  return data;
+};
+
+export const submitHelpRequest = async (title: string, description: string) => {
+  const response = await fetch(`${API_BASE_URL}/api/support/help`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ title, description }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.message || 'Failed to submit help request');
+  }
+  return data;
+};
+
+// There is no SMS provider wired up on the backend yet (no Twilio/etc.).
+// This routes the alert through the expert-help-request endpoint so it's at
+// least persisted and visible to whoever handles HelpRequest records, rather
+// than being a pure no-op mock.
 export const sendSMSAlert = async (phoneNumber: string, message: string): Promise<boolean> => {
-  // Simulate API call
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-  console.log(`SMS sent to ${phoneNumber}: ${message}`);
+  await submitHelpRequest(
+    `SMS Alert Request: ${phoneNumber}`,
+    message
+  );
   return true;
 };
