@@ -1,6 +1,7 @@
 import os
 import torch
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from PIL import Image
 import io
@@ -8,6 +9,7 @@ from torchvision import transforms
 
 # Import mobilevit.py (placed in same folder as app.py)
 from mobilevit import mobilevit_xxs
+from treatments import get_treatments
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -95,13 +97,34 @@ def predict_disease(crop_name, image_tensor):
     disease_labels = DISEASE_CLASS_NAMES[crop_name]
     with torch.no_grad():
         logits = disease_model(image_tensor.unsqueeze(0))
-        idx = logits.argmax(1).item()
-        return disease_labels[idx]
+        probs = torch.softmax(logits, dim=1)
+        idx = probs.argmax(1).item()
+        confidence = round(probs[0, idx].item() * 100, 2)
+        return disease_labels[idx], confidence
+
+def build_result(crop, disease, confidence):
+    return {
+        "crop": crop,
+        "disease": disease,
+        "confidence": confidence,
+        "recommendations": get_treatments(disease),
+    }
 
 # -------------------------
 # FastAPI app
 # -------------------------
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "cropguard-ai-ml"}
 
 @app.post("/predict/")
 async def predict_endpoint(file: UploadFile = File(...)):
@@ -110,9 +133,9 @@ async def predict_endpoint(file: UploadFile = File(...)):
     img_tensor = test_transforms(img).to(device)
 
     crop = predict_crop(img_tensor)
-    disease = predict_disease(crop, img_tensor)
+    disease, confidence = predict_disease(crop, img_tensor)
 
-    return {"crop": crop, "disease": disease}
+    return build_result(crop, disease, confidence)
 
 @app.post("/predict_batch/")
 async def predict_batch(files: list[UploadFile] = File(...)):
@@ -123,8 +146,12 @@ async def predict_batch(files: list[UploadFile] = File(...)):
         img_tensor = test_transforms(img).to(device)
 
         crop = predict_crop(img_tensor)
-        disease = predict_disease(crop, img_tensor)
+        disease, confidence = predict_disease(crop, img_tensor)
 
-        results.append({"file": file.filename, "crop": crop, "disease": disease})
+        results.append({"file": file.filename, **build_result(crop, disease, confidence)})
 
     return results
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=10000)
