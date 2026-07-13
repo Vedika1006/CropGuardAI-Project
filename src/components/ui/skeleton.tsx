@@ -3,7 +3,7 @@ import { View, StyleSheet, Animated, ViewStyle } from 'react-native';
 import { colors } from '@/theme/colors';
 
 interface SkeletonProps {
-  width?: number | string;
+  width?: ViewStyle['width'];
   height?: number;
   style?: ViewStyle;
 }
