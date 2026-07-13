@@ -72,7 +72,12 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
 *.tsbuildinfo
+
+# python
+.venv/
+__pycache__/
